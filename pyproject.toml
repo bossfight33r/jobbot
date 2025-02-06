@@ -1,0 +1,11 @@
+[project]
+name = "jobbot"
+version = "0.1.0"
+description = "Telegram bot that monitors job channels and sends matching vacancies"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram==3.7.0",
+    "telethon==1.36.0",
+    "aiosqlite==0.20.0",
+    "python-dotenv==1.0.1",
+]

@@ -1,13 +1,16 @@
 run:
-	python main.py
+	uv run python main.py
 
-install:
-	pip install -r requirements.txt
+setup:
+	uv run python setup_session.py
+
+sync:
+	uv sync
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 format:
-	ruff format .
+	uv run ruff format .
 
-.PHONY: run install lint format
+.PHONY: run setup sync lint format
