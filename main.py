@@ -3,6 +3,7 @@ import json
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
 import config
@@ -82,7 +83,7 @@ async def main():
     await parser.start()
 
     bot = Bot(token=cfg.bot_token)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
     handlers.setup(db)
     dp.include_router(handlers.router)
 
