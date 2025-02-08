@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 import config
 from bot import handlers
+from filters import ai as ai_filter
 from filters.match import matches
 from parser.client import Parser
 from storage.db import DB
@@ -47,7 +48,12 @@ async def check_once(parser: Parser, db: DB, bot: Bot):
                     continue
 
                 keywords = json.loads(user["keywords"])
-                if not matches(post["text"], keywords):
+                ai_profile = user.get("ai_profile", "")
+
+                if ai_profile:
+                    if not await ai_filter.is_relevant(post["text"], ai_profile):
+                        continue
+                elif not matches(post["text"], keywords):
                     continue
 
                 if await db.already_sent(user["user_id"], post_id):
@@ -86,6 +92,10 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
     handlers.setup(db)
     dp.include_router(handlers.router)
+
+    if cfg.gemini_api_key:
+        ai_filter.init(cfg.gemini_api_key)
+        logger.info("gemini AI filter enabled")
 
     logger.info("starting jobbot, check interval=%ds", cfg.check_interval)
 

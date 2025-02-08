@@ -9,6 +9,7 @@ class Config:
     bot_token: str
     db_path: str
     check_interval: int
+    gemini_api_key: str | None
 
 
 def load() -> Config:
@@ -18,4 +19,5 @@ def load() -> Config:
         bot_token=os.environ["BOT_TOKEN"],
         db_path=os.environ.get("DB_PATH", "jobbot.db"),
         check_interval=int(os.environ.get("CHECK_INTERVAL", "300")),
+        gemini_api_key=os.environ.get("GEMINI_API_KEY"),
     )

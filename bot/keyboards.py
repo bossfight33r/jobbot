@@ -8,6 +8,9 @@ def main_menu(active: bool) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="📋 Фильтры", callback_data="screen:filters"),
         InlineKeyboardButton(text="📺 Каналы", callback_data="screen:channels"),
     )
+    builder.row(
+        InlineKeyboardButton(text="🤖 AI профиль", callback_data="screen:ai"),
+    )
     toggle = "⏸ Пауза" if active else "▶️ Возобновить"
     toggle_cb = "toggle:pause" if active else "toggle:resume"
     builder.row(

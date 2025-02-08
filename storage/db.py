@@ -5,11 +5,12 @@ import aiosqlite
 
 CREATE_TABLES = """
 CREATE TABLE IF NOT EXISTS users (
-    user_id   INTEGER PRIMARY KEY,
-    keywords  TEXT    NOT NULL DEFAULT '[]',
-    channels  TEXT    NOT NULL DEFAULT '[]',
-    active    INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT   NOT NULL DEFAULT (datetime('now'))
+    user_id    INTEGER PRIMARY KEY,
+    keywords   TEXT    NOT NULL DEFAULT '[]',
+    channels   TEXT    NOT NULL DEFAULT '[]',
+    active     INTEGER NOT NULL DEFAULT 1,
+    ai_profile TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS posts (
@@ -44,7 +45,12 @@ class DB:
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.executescript(CREATE_TABLES)
-        await self._conn.commit()
+        # migrate: add ai_profile if missing
+        try:
+            await self._conn.execute("ALTER TABLE users ADD COLUMN ai_profile TEXT NOT NULL DEFAULT ''")
+            await self._conn.commit()
+        except Exception:
+            pass
 
     async def close(self):
         if self._conn:
@@ -72,6 +78,13 @@ class DB:
         await self._conn.execute(
             "UPDATE users SET channels = ? WHERE user_id = ?",
             (json.dumps(channels), user_id),
+        )
+        await self._conn.commit()
+
+    async def set_ai_profile(self, user_id: int, profile: str):
+        await self._conn.execute(
+            "UPDATE users SET ai_profile = ? WHERE user_id = ?",
+            (profile, user_id),
         )
         await self._conn.commit()
 

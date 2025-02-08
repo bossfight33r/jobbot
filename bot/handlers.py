@@ -23,6 +23,7 @@ def setup(db: DB):
 class Form(StatesGroup):
     adding_filter = State()
     adding_channel = State()
+    setting_ai_profile = State()
 
 
 async def _main_text_and_kb(user_id: int):
@@ -193,6 +194,63 @@ async def cb_del_channel(cb: CallbackQuery):
     text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями."
     await cb.message.edit_text(text, reply_markup=channels_menu(channels), parse_mode="HTML")
     await cb.answer(f"Удалил {ch}")
+
+
+@router.callback_query(F.data == "screen:ai")
+async def cb_ai(cb: CallbackQuery, state: FSMContext):
+    user = await _db.get_or_create_user(cb.from_user.id)
+    profile = user.get("ai_profile", "") or ""
+    if profile:
+        text = f"<b>🤖 AI фильтр активен</b>\n\nТвой профиль:\n<i>{profile}</i>\n\nAI читает каждую вакансию и решает — подходит тебе или нет.\nОтправь новый профиль чтобы изменить, или нажми «Очистить»."
+    else:
+        text = (
+            "<b>🤖 AI фильтр</b>\n\n"
+            "Опиши что ищешь — AI будет читать каждую вакансию и фильтровать.\n\n"
+            "Например:\n"
+            "<i>Python backend разработчик, удалённо, от 150к рублей</i>\n\n"
+            "Отправь описание чтобы включить:"
+        )
+    builder = InlineKeyboardBuilder()
+    if profile:
+        builder.row(InlineKeyboardButton(text="✏️ Изменить", callback_data="ai:edit"))
+        builder.row(InlineKeyboardButton(text="🗑 Очистить", callback_data="ai:clear"))
+    else:
+        builder.row(InlineKeyboardButton(text="✏️ Задать профиль", callback_data="ai:edit"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="screen:main"))
+    await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await cb.answer()
+
+
+@router.callback_query(F.data == "ai:edit")
+async def cb_ai_edit(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(Form.setting_ai_profile)
+    await cb.message.edit_text(
+        "Опиши кого ищешь — стек, формат, зарплата:\n\n"
+        "<i>Например: Python backend, удалённо, senior, от 200к</i>",
+        reply_markup=back_to_main(),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.message(Form.setting_ai_profile)
+async def msg_setting_ai_profile(msg: Message, state: FSMContext):
+    profile = msg.text.strip()
+    await _db.set_ai_profile(msg.from_user.id, profile)
+    await state.clear()
+    await msg.answer(
+        f"✅ AI профиль сохранён:\n<i>{profile}</i>\n\nТеперь буду фильтровать вакансии через Gemini.",
+        reply_markup=back_to_main(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "ai:clear")
+async def cb_ai_clear(cb: CallbackQuery):
+    await _db.set_ai_profile(cb.from_user.id, "")
+    text, kb = await _main_text_and_kb(cb.from_user.id)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await cb.answer("AI фильтр отключён")
 
 
 @router.callback_query(F.data == "noop")
