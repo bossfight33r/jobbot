@@ -69,13 +69,18 @@ async def cb_fetch_jobs(cb: CallbackQuery):
 
     await cb.answer("Ищу вакансии…")
 
+    total_fetched = 0
     if _parser:
         for ch in channels:
             posts = await _parser.fetch(ch, limit=30)
+            logger.info("fetched %d posts from %s", len(posts), ch)
+            total_fetched += len(posts)
             for p in posts:
                 await _db.save_post(p["channel"], p["message_id"], p["text"], p["posted_at"])
 
+    logger.info("total fetched: %d, checking unsent for user %d", total_fetched, cb.from_user.id)
     unsent = await _db.get_unsent_posts(cb.from_user.id, channels, limit=FETCH_BATCH * 5)
+    logger.info("unsent posts found: %d", len(unsent))
 
     sent = 0
     for post in unsent:
@@ -227,11 +232,22 @@ async def cb_add_channel(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
+def _normalize_channel(raw: str) -> str:
+    raw = raw.strip()
+    # https://t.me/username or t.me/username
+    for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
+        if raw.lower().startswith(prefix):
+            raw = raw[len(prefix):]
+            break
+    raw = raw.split("/")[0].split("?")[0]
+    if not raw.startswith("@"):
+        raw = "@" + raw
+    return raw
+
+
 @router.message(Form.adding_channel)
 async def msg_adding_channel(msg: Message, state: FSMContext):
-    ch = msg.text.strip()
-    if not ch.startswith("@"):
-        ch = "@" + ch
+    ch = _normalize_channel(msg.text)
 
     user = await _db.get_or_create_user(msg.from_user.id)
     channels = json.loads(user["channels"])
