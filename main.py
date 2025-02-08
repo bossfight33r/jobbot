@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import signal
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -70,13 +71,16 @@ async def check_once(parser: Parser, db: DB, bot: Bot):
                     logger.warning("failed to send to %s: %s", user["user_id"], e)
 
 
-async def scheduler(parser: Parser, db: DB, bot: Bot, interval: int):
-    while True:
+async def scheduler(parser: Parser, db: DB, bot: Bot, interval: int, stop: asyncio.Event):
+    while not stop.is_set():
         try:
             await check_once(parser, db, bot)
         except Exception as e:
             logger.error("check failed: %s", e)
-        await asyncio.sleep(interval)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def main():
@@ -99,10 +103,25 @@ async def main():
 
     logger.info("starting jobbot, check interval=%ds", cfg.check_interval)
 
-    await asyncio.gather(
-        dp.start_polling(bot),
-        scheduler(parser, db, bot, cfg.check_interval),
-    )
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+
+    sched = asyncio.create_task(scheduler(parser, db, bot, cfg.check_interval, stop))
+    poll = asyncio.create_task(dp.start_polling(bot))
+
+    await stop.wait()
+    logger.info("shutting down…")
+
+    poll.cancel()
+    sched.cancel()
+    await asyncio.gather(poll, sched, return_exceptions=True)
+
+    await parser.stop()
+    await db.close()
+    logger.info("bye")
 
 
 if __name__ == "__main__":
