@@ -8,16 +8,22 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import back_to_main, channels_menu, filters_menu, main_menu
+from filters import ai as ai_filter
+from filters.match import matches
 from storage.db import DB
 
 logger = logging.getLogger(__name__)
 router = Router()
 _db: DB | None = None
+_parser = None
+
+FETCH_BATCH = 5
 
 
-def setup(db: DB):
-    global _db
+def setup(db: DB, parser=None):
+    global _db, _parser
     _db = db
+    _parser = parser
 
 
 class Form(StatesGroup):
@@ -46,6 +52,60 @@ async def cmd_start(msg: Message, state: FSMContext):
     await _db.get_or_create_user(msg.from_user.id)
     text, kb = await _main_text_and_kb(msg.from_user.id)
     await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "fetch:jobs")
+async def cb_fetch_jobs(cb: CallbackQuery):
+    user = await _db.get_or_create_user(cb.from_user.id)
+    channels = json.loads(user["channels"])
+    keywords = json.loads(user["keywords"])
+    ai_profile = user.get("ai_profile", "") or ""
+
+    if not channels:
+        await cb.answer("Сначала добавь каналы", show_alert=True)
+        return
+
+    await cb.answer("Ищу вакансии…")
+
+    if _parser:
+        for ch in channels:
+            posts = await _parser.fetch(ch, limit=30)
+            for p in posts:
+                await _db.save_post(p["channel"], p["message_id"], p["text"], p["posted_at"])
+
+    unsent = await _db.get_unsent_posts(cb.from_user.id, channels, limit=FETCH_BATCH * 5)
+
+    sent = 0
+    for post in unsent:
+        if sent >= FETCH_BATCH:
+            break
+
+        text = post["text"] or ""
+        ch = post["channel"].lstrip("@")
+        link = f"https://t.me/{ch}/{post['message_id']}"
+
+        if ai_profile:
+            if not await ai_filter.is_relevant(text, ai_profile):
+                await _db.mark_sent(cb.from_user.id, post["id"])
+                continue
+        elif keywords and not matches(text, keywords):
+            await _db.mark_sent(cb.from_user.id, post["id"])
+            continue
+
+        try:
+            await cb.message.answer(
+                f"{text[:800]}\n\n{link}",
+                disable_web_page_preview=True,
+            )
+            await _db.mark_sent(cb.from_user.id, post["id"])
+            sent += 1
+        except Exception as e:
+            logger.warning("send error: %s", e)
+
+    if sent == 0:
+        await cb.message.answer("Новых подходящих вакансий нет")
+    else:
+        await cb.message.answer(f"Показал {sent} вакансий 👆")
 
 
 @router.callback_query(F.data == "screen:main")

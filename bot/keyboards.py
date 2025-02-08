@@ -5,6 +5,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def main_menu(active: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
+        InlineKeyboardButton(text="📨 Найти вакансии", callback_data="fetch:jobs"),
+    )
+    builder.row(
         InlineKeyboardButton(text="📋 Фильтры", callback_data="screen:filters"),
         InlineKeyboardButton(text="📺 Каналы", callback_data="screen:channels"),
     )

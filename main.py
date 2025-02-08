@@ -90,7 +90,7 @@ async def main():
 
     bot = Bot(token=cfg.bot_token)
     dp = Dispatcher(storage=MemoryStorage())
-    handlers.setup(db)
+    handlers.setup(db, parser)
     dp.include_router(handlers.router)
 
     if cfg.gemini_api_key:

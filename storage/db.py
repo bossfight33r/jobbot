@@ -126,3 +126,28 @@ class DB:
             (user_id, post_id),
         )
         await self._conn.commit()
+
+    async def get_unsent_posts(self, user_id: int, channels: list[str], limit: int) -> list[dict]:
+        if not channels:
+            return []
+        placeholders = ",".join("?" * len(channels))
+        async with self._conn.execute(
+            f"""
+            SELECT p.* FROM posts p
+            WHERE p.channel IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM sent s WHERE s.user_id = ? AND s.post_id = p.id
+              )
+            ORDER BY p.posted_at DESC
+            LIMIT ?
+            """,
+            (*channels, user_id, limit),
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def get_post_by_id(self, post_id: int) -> dict | None:
+        async with self._conn.execute(
+            "SELECT * FROM posts WHERE id = ?", (post_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
