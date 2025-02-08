@@ -33,7 +33,14 @@ async def check_once(parser: Parser, db: DB, bot: Bot):
         return
 
     for channel in all_channels:
-        posts = await parser.fetch(channel)
+        min_id = await db.get_cursor(channel)
+        posts = await parser.fetch(channel, limit=50, min_id=min_id)
+        if not posts:
+            continue
+
+        new_max_id = max(p["message_id"] for p in posts)
+        await db.set_cursor(channel, new_max_id)
+
         for post in posts:
             post_id = await db.save_post(
                 post["channel"],

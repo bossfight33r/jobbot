@@ -18,7 +18,7 @@ class Parser:
     async def stop(self):
         await self.client.disconnect()
 
-    async def fetch(self, channel: str, limit: int = 20) -> list[dict]:
+    async def fetch(self, channel: str, limit: int = 20, min_id: int = 0) -> list[dict]:
         try:
             entity = await self.client.get_entity(channel)
         except (ChannelPrivateError, UsernameNotOccupiedError, ValueError) as e:
@@ -26,7 +26,7 @@ class Parser:
             return []
 
         results = []
-        async for msg in self.client.iter_messages(entity, limit=limit):
+        async for msg in self.client.iter_messages(entity, limit=limit, min_id=min_id):
             if not isinstance(msg, Message) or not msg.text:
                 continue
             posted_at = msg.date.astimezone(timezone.utc).isoformat()
@@ -39,3 +39,12 @@ class Parser:
             })
 
         return results
+
+    async def latest_id(self, channel: str) -> int:
+        try:
+            entity = await self.client.get_entity(channel)
+        except Exception:
+            return 0
+        async for msg in self.client.iter_messages(entity, limit=1):
+            return msg.id
+        return 0

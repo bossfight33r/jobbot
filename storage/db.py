@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS sent (
     sent_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, post_id)
 );
+
+CREATE TABLE IF NOT EXISTS cursors (
+    channel    TEXT    NOT NULL,
+    min_msg_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (channel)
+);
 """
 
 
@@ -144,6 +150,21 @@ class DB:
             (*channels, user_id, limit),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+    async def get_cursor(self, channel: str) -> int:
+        async with self._conn.execute(
+            "SELECT min_msg_id FROM cursors WHERE channel = ?", (channel,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 0
+
+    async def set_cursor(self, channel: str, min_msg_id: int):
+        await self._conn.execute(
+            "INSERT INTO cursors (channel, min_msg_id) VALUES (?, ?) "
+            "ON CONFLICT(channel) DO UPDATE SET min_msg_id = excluded.min_msg_id",
+            (channel, min_msg_id),
+        )
+        await self._conn.commit()
 
     async def get_post_by_id(self, post_id: int) -> dict | None:
         async with self._conn.execute(

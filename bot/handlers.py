@@ -255,6 +255,12 @@ async def msg_adding_channel(msg: Message, state: FSMContext):
         channels.append(ch)
         await _db.set_channels(msg.from_user.id, channels)
 
+        # запомнить текущий последний пост — чтобы не спамить историей
+        if _parser:
+            latest = await _parser.latest_id(ch)
+            if latest:
+                await _db.set_cursor(ch, latest)
+
     await state.clear()
     text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями."
     await msg.answer(text, reply_markup=channels_menu(channels), parse_mode="HTML")
