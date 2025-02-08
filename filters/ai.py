@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from google import genai
@@ -20,21 +21,25 @@ def init(api_key: str):
     _client = genai.Client(api_key=api_key)
 
 
+def _call_gemini(prompt: str) -> str:
+    response = _client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            max_output_tokens=10,
+            temperature=0.1,
+        ),
+    )
+    return response.text.strip().upper()
+
+
 async def is_relevant(text: str, profile: str) -> bool:
     if _client is None or not profile.strip():
         return True
 
     try:
         prompt = PROMPT.format(profile=profile, text=text[:2000])
-        response = await _client.aio.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=10,
-                temperature=0.1,
-            ),
-        )
-        answer = response.text.strip().upper()
+        answer = await asyncio.to_thread(_call_gemini, prompt)
         return answer.startswith("YES")
     except Exception as e:
         logger.warning("gemini error: %s", e)
