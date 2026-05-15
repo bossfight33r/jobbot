@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 
-from bot.keyboards import back_to_main, channels_menu, filters_menu, main_menu
+from bot.keyboards import back_to_main, channels_menu, filters_menu, main_menu, start_keyboard
 from filters import ai as ai_filter
 from filters.match import matches
 from storage.db import DB
@@ -52,6 +52,15 @@ async def _main_text_and_kb(user_id: int):
 async def cmd_start(msg: Message, state: FSMContext):
     await state.clear()
     await _db.get_or_create_user(msg.from_user.id)
+    # показываем постоянную кнопку внизу чата
+    await msg.answer("👋", reply_markup=start_keyboard())
+    text, kb = await _main_text_and_kb(msg.from_user.id)
+    await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.message(F.text == "🚀 Меню")
+async def msg_menu_button(msg: Message, state: FSMContext):
+    await state.clear()
     text, kb = await _main_text_and_kb(msg.from_user.id)
     await msg.answer(text, reply_markup=kb, parse_mode="HTML")
 

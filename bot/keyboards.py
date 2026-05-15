@@ -1,5 +1,5 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 
 def main_menu(active: bool) -> InlineKeyboardMarkup:
@@ -45,6 +45,12 @@ def channels_menu(channels: list[str]) -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text="➕ Добавить канал", callback_data="add:channel"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="screen:main"))
     return builder.as_markup()
+
+
+def start_keyboard() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.add(KeyboardButton(text="🚀 Меню"))
+    return builder.as_markup(resize_keyboard=True, persistent=True)
 
 
 def back_to_main() -> InlineKeyboardMarkup:
