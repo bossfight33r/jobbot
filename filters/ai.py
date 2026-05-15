@@ -23,14 +23,21 @@ def init(api_key: str):
 
 def _call_gemini(prompt: str) -> str:
     response = _client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
-            max_output_tokens=10,
+            max_output_tokens=64,
             temperature=0.1,
         ),
     )
-    return response.text.strip().upper()
+    if response.text:
+        return response.text.strip().upper()
+    # fallback: try candidates
+    for candidate in (response.candidates or []):
+        for part in (candidate.content.parts or []):
+            if part.text:
+                return part.text.strip().upper()
+    return "NO"
 
 
 async def is_relevant(text: str, profile: str) -> bool:
