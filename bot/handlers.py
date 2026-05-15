@@ -91,9 +91,11 @@ async def cb_fetch_jobs(cb: CallbackQuery):
     unsent = await _db.get_unsent_posts(cb.from_user.id, channels, limit=FETCH_BATCH * 5)
     logger.info("unsent posts found: %d", len(unsent))
 
-    sent = 0
+    cards: list[str] = []
+    to_mark: list[int] = []
+
     for post in unsent:
-        if sent >= FETCH_BATCH:
+        if len(cards) >= FETCH_BATCH:
             break
 
         text = post["text"] or ""
@@ -108,20 +110,23 @@ async def cb_fetch_jobs(cb: CallbackQuery):
             await _db.mark_sent(cb.from_user.id, post["id"])
             continue
 
-        try:
-            await cb.message.answer(
-                f"{text[:800]}\n\n{link}",
-                disable_web_page_preview=True,
-            )
-            await _db.mark_sent(cb.from_user.id, post["id"])
-            sent += 1
-        except Exception as e:
-            logger.warning("send error: %s", e)
+        # первая непустая строка — заголовок, остальное обрезаем
+        first_line = next((l.strip() for l in text.splitlines() if l.strip()), text[:80])
+        snippet = first_line[:120]
+        cards.append(f"<a href='{link}'>{snippet}</a>")
+        to_mark.append(post["id"])
 
-    if sent == 0:
+    if not cards:
         await cb.message.answer("Новых подходящих вакансий нет")
-    else:
-        await cb.message.answer(f"Показал {sent} вакансий 👆")
+        return
+
+    msg_text = "\n\n".join(f"{i+1}. {card}" for i, card in enumerate(cards))
+    try:
+        await cb.message.answer(msg_text, parse_mode="HTML", disable_web_page_preview=True)
+        for post_id in to_mark:
+            await _db.mark_sent(cb.from_user.id, post_id)
+    except Exception as e:
+        logger.warning("send error: %s", e)
 
 
 @router.callback_query(F.data == "screen:main")
