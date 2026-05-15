@@ -41,13 +41,19 @@ def _call_gemini(prompt: str) -> str:
 
 
 async def is_relevant(text: str, profile: str) -> bool:
-    if _client is None or not profile.strip():
+    if _client is None:
+        logger.debug("ai filter: no client, skipping")
+        return True
+    if not profile.strip():
+        logger.debug("ai filter: no profile, skipping")
         return True
 
     try:
         prompt = PROMPT.format(profile=profile, text=text[:2000])
         answer = await asyncio.to_thread(_call_gemini, prompt)
-        return answer.startswith("YES")
+        result = answer.startswith("YES")
+        logger.info("ai filter: %s → %s", "YES" if result else "NO", text[:60].replace("\n", " "))
+        return result
     except Exception as e:
-        logger.warning("gemini error: %s", e)
-        return True
+        logger.warning("gemini error (fallback=pass): %s", e)
+        return False  # при ошибке — лучше пропустить, чем спамить
