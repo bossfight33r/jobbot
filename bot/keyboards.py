@@ -21,6 +21,9 @@ def main_menu(active: bool) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=toggle, callback_data=toggle_cb),
         InlineKeyboardButton(text="📊 Статус", callback_data="screen:status"),
     )
+    builder.row(
+        InlineKeyboardButton(text="📈 Статистика", callback_data="screen:stats"),
+    )
     return builder.as_markup()
 
 

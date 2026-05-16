@@ -190,6 +190,25 @@ class DB:
         )
         await self._conn.commit()
 
+    async def get_stats(self, user_id: int) -> dict:
+        async with self._conn.execute(
+            """
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN s.sent_at >= date('now') THEN 1 ELSE 0 END) as today,
+                SUM(CASE WHEN s.sent_at >= date('now', '-7 days') THEN 1 ELSE 0 END) as week,
+                SUM(CASE WHEN p.channel = 'hh.ru' THEN 1 ELSE 0 END) as hh_total,
+                SUM(CASE WHEN p.channel = 'hh.ru' AND s.sent_at >= date('now') THEN 1 ELSE 0 END) as hh_today,
+                SUM(CASE WHEN p.channel = 'hh.ru' AND s.sent_at >= date('now', '-7 days') THEN 1 ELSE 0 END) as hh_week
+            FROM sent s
+            JOIN posts p ON p.id = s.post_id
+            WHERE s.user_id = ?
+            """,
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else {}
+
     async def get_post_by_id(self, post_id: int) -> dict | None:
         async with self._conn.execute(
             "SELECT * FROM posts WHERE id = ?", (post_id,)

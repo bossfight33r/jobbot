@@ -177,6 +177,30 @@ async def cb_status(cb: CallbackQuery):
     await cb.answer()
 
 
+@router.callback_query(F.data == "screen:stats")
+async def cb_stats(cb: CallbackQuery):
+    s = await _db.get_stats(cb.from_user.id)
+    total = s.get("total") or 0
+    today = s.get("today") or 0
+    week = s.get("week") or 0
+    hh_total = s.get("hh_total") or 0
+    hh_today = s.get("hh_today") or 0
+    hh_week = s.get("hh_week") or 0
+    tg_total = total - hh_total
+    tg_today = today - hh_today
+    tg_week = week - hh_week
+
+    text = (
+        "<b>📊 Статистика</b>\n\n"
+        f"{'':>2}{'Сегодня':>9}{'Неделя':>9}{'Всего':>8}\n"
+        f"{'📨 Всего':<10}{today:>7}{week:>9}{total:>8}\n"
+        f"{'🔎 HH.ru':<10}{hh_today:>7}{hh_week:>9}{hh_total:>8}\n"
+        f"{'📢 Каналы':<10}{tg_today:>7}{tg_week:>9}{tg_total:>8}"
+    )
+    await cb.message.edit_text(text, reply_markup=back_to_main(), parse_mode="HTML")
+    await cb.answer()
+
+
 @router.callback_query(F.data == "toggle:pause")
 async def cb_pause(cb: CallbackQuery):
     await _db.set_active(cb.from_user.id, False)
