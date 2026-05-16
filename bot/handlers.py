@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 
-from bot.keyboards import back_to_main, channels_menu, filters_menu, main_menu, start_keyboard
+from bot.keyboards import back_to_main, channels_menu, filters_menu, main_menu, start_keyboard, hh_menu, hh_area_menu, AREA_NAMES
 from filters import ai as ai_filter
 from filters.match import matches
 from storage.db import DB
@@ -32,6 +32,7 @@ class Form(StatesGroup):
     adding_filter = State()
     adding_channel = State()
     setting_ai_profile = State()
+    setting_hh_query = State()
 
 
 async def _main_text_and_kb(user_id: int):
@@ -349,6 +350,84 @@ async def cb_ai_clear(cb: CallbackQuery):
     text, kb = await _main_text_and_kb(cb.from_user.id)
     await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer("AI фильтр отключён")
+
+
+@router.callback_query(F.data == "screen:hh")
+async def cb_hh(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    user = await _db.get_or_create_user(cb.from_user.id)
+    query = user.get("hh_query", "") or ""
+    area = user.get("hh_area", "113") or "113"
+    area_name = AREA_NAMES.get(area, area)
+    if query:
+        text = f"<b>🔎 HH.ru поиск</b>\n\nЗапрос: <code>{query}</code>\nРегион: {area_name}"
+    else:
+        text = (
+            "<b>🔎 HH.ru поиск</b>\n\n"
+            "Поиск не настроен. Настрой запрос — n8n будет присылать вакансии с HH.ru."
+        )
+    await cb.message.edit_text(text, reply_markup=hh_menu(query, area_name), parse_mode="HTML")
+    await cb.answer()
+
+
+@router.callback_query(F.data == "hh:edit:query")
+async def cb_hh_edit_query(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(Form.setting_hh_query)
+    await cb.message.edit_text(
+        "Введи поисковый запрос для HH.ru:\n\n"
+        "<i>Например: python backend, data engineer, golang</i>",
+        reply_markup=back_to_main(),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.message(Form.setting_hh_query)
+async def msg_setting_hh_query(msg: Message, state: FSMContext):
+    query = msg.text.strip()
+    if not query:
+        await msg.answer("Пустой запрос, попробуй ещё раз:")
+        return
+    await _db.set_hh_query(msg.from_user.id, query)
+    await state.clear()
+    user = await _db.get_or_create_user(msg.from_user.id)
+    area = user.get("hh_area", "113") or "113"
+    area_name = AREA_NAMES.get(area, area)
+    text = f"<b>🔎 HH.ru поиск</b>\n\nЗапрос: <code>{query}</code>\nРегион: {area_name}"
+    await msg.answer(text, reply_markup=hh_menu(query, area_name), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "hh:edit:area")
+async def cb_hh_edit_area(cb: CallbackQuery):
+    await cb.message.edit_text(
+        "Выбери регион поиска:",
+        reply_markup=hh_area_menu(),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("hh:area:"))
+async def cb_hh_area(cb: CallbackQuery):
+    area = cb.data.removeprefix("hh:area:")
+    await _db.set_hh_area(cb.from_user.id, area)
+    area_name = AREA_NAMES.get(area, area)
+    user = await _db.get_or_create_user(cb.from_user.id)
+    query = user.get("hh_query", "") or ""
+    text = f"<b>🔎 HH.ru поиск</b>\n\nЗапрос: <code>{query}</code>\nРегион: {area_name}"
+    await cb.message.edit_text(text, reply_markup=hh_menu(query, area_name), parse_mode="HTML")
+    await cb.answer(f"Регион: {area_name}")
+
+
+@router.callback_query(F.data == "hh:clear")
+async def cb_hh_clear(cb: CallbackQuery):
+    await _db.set_hh_query(cb.from_user.id, "")
+    text = (
+        "<b>🔎 HH.ru поиск</b>\n\n"
+        "Поиск не настроен. Настрой запрос — n8n будет присылать вакансии с HH.ru."
+    )
+    await cb.message.edit_text(text, reply_markup=hh_menu("", ""), parse_mode="HTML")
+    await cb.answer("HH.ru поиск отключён")
 
 
 @router.callback_query(F.data == "noop")

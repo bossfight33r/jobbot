@@ -51,12 +51,16 @@ class DB:
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.executescript(CREATE_TABLES)
-        # migrate: add ai_profile if missing
-        try:
-            await self._conn.execute("ALTER TABLE users ADD COLUMN ai_profile TEXT NOT NULL DEFAULT ''")
-            await self._conn.commit()
-        except Exception:
-            pass
+        for migration in [
+            "ALTER TABLE users ADD COLUMN ai_profile TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN hh_query TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN hh_area TEXT NOT NULL DEFAULT '113'",
+        ]:
+            try:
+                await self._conn.execute(migration)
+                await self._conn.commit()
+            except Exception:
+                pass
 
     async def close(self):
         if self._conn:
@@ -93,6 +97,26 @@ class DB:
             (profile, user_id),
         )
         await self._conn.commit()
+
+    async def set_hh_query(self, user_id: int, query: str):
+        await self._conn.execute(
+            "UPDATE users SET hh_query = ? WHERE user_id = ?",
+            (query, user_id),
+        )
+        await self._conn.commit()
+
+    async def set_hh_area(self, user_id: int, area: str):
+        await self._conn.execute(
+            "UPDATE users SET hh_area = ? WHERE user_id = ?",
+            (area, user_id),
+        )
+        await self._conn.commit()
+
+    async def get_hh_queries(self) -> list[dict]:
+        async with self._conn.execute(
+            "SELECT user_id, hh_query, hh_area FROM users WHERE active = 1 AND hh_query != ''"
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
 
     async def set_active(self, user_id: int, active: bool):
         await self._conn.execute(

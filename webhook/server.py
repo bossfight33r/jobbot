@@ -31,7 +31,6 @@ async def handle_vacancy(request: web.Request) -> web.Response:
     if not vacancy_id or not text:
         return web.Response(status=400, text="vacancy_id and text required")
 
-    # собираем читаемый текст вакансии
     parts = [title]
     if salary:
         parts.append(salary)
@@ -49,6 +48,10 @@ async def handle_vacancy(request: web.Request) -> web.Response:
 
     users = await db.active_users()
     for user in users:
+        # HH вакансии только тем у кого настроен hh_query
+        if not user.get("hh_query", ""):
+            continue
+
         ai_profile = user.get("ai_profile", "") or ""
         keywords = json.loads(user["keywords"])
 
@@ -62,7 +65,7 @@ async def handle_vacancy(request: web.Request) -> web.Response:
             continue
 
         try:
-            msg = f"{title}"
+            msg = title
             if salary:
                 msg += f"\n{salary}"
             if company:
@@ -79,9 +82,16 @@ async def handle_vacancy(request: web.Request) -> web.Response:
     return web.Response(status=200, text="ok")
 
 
+async def handle_hh_queries(request: web.Request) -> web.Response:
+    db: DB = request.app["db"]
+    queries = await db.get_hh_queries()
+    return web.json_response(queries)
+
+
 def create_app(db: DB, bot) -> web.Application:
     app = web.Application()
     app["db"] = db
     app["bot"] = bot
     app.router.add_post("/vacancy", handle_vacancy)
+    app.router.add_get("/hh-queries", handle_hh_queries)
     return app

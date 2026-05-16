@@ -3,88 +3,91 @@
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] }
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 30 }]
+        }
       },
       "name": "Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [240, 300]
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "id": "1"
     },
     {
       "parameters": {
-        "url": "https://api.hh.ru/vacancies",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "text", "value": "={{ $vars.HH_QUERY }}" },
-            { "name": "area", "value": "={{ $vars.HH_AREA }}" },
-            { "name": "per_page", "value": "20" },
-            { "name": "order_by", "value": "publication_time" },
-            { "name": "search_field", "value": "name" }
-          ]
-        },
-        "options": {
-          "response": { "response": { "responseFormat": "json" } }
-        }
-      },
-      "name": "Fetch HH.ru",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "fieldToSplitOut": "items",
+        "url": "http://localhost:8080/hh-queries",
         "options": {}
       },
-      "name": "Split Vacancies",
-      "type": "n8n-nodes-base.splitOut",
-      "position": [680, 300]
+      "name": "Get HH Queries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "id": "2"
     },
     {
       "parameters": {
-        "url": "=https://api.hh.ru/vacancies/{{ $json.id }}",
+        "jsCode": "const queries = $input.item.json;\nif (!Array.isArray(queries) || queries.length === 0) return [];\nreturn queries.map(q => ({ json: q }));"
+      },
+      "name": "Split Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "id": "3"
+    },
+    {
+      "parameters": {
+        "url": "=https://hh.ru/search/vacancy/rss?text={{ encodeURIComponent($json.hh_query) }}{{ $json.hh_area !== 'remote' ? '&area=' + $json.hh_area : '&schedule=remote' }}",
         "options": {
-          "response": { "response": { "responseFormat": "json" } }
+          "timeout": 15000
         }
       },
-      "name": "Get Details",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [900, 300]
+      "name": "RSS HH.ru",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "id": "4"
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.item.json;\n\nconst salary_from = item.salary?.from;\nconst salary_to = item.salary?.to;\nconst currency = item.salary?.currency || '';\n\nlet salary = '';\nif (salary_from && salary_to) {\n  salary = `${salary_from}–${salary_to} ${currency}`;\n} else if (salary_from) {\n  salary = `от ${salary_from} ${currency}`;\n} else if (salary_to) {\n  salary = `до ${salary_to} ${currency}`;\n}\n\nconst description = item.description\n  ? item.description.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 1500)\n  : '';\n\nreturn [{\n  json: {\n    vacancy_id: item.id,\n    title: item.name,\n    salary: salary,\n    company: item.employer?.name || '',\n    area: item.area?.name || '',\n    link: item.alternate_url,\n    text: description\n  }\n}];"
+        "jsCode": "const item = $input.item.json;\n\nconst desc = item.content\n  ? item.content.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 1500)\n  : '';\n\nconst id = item.link?.match(/\\/vacancy\\/(\\d+)/)?.[1]\n         || item.guid?.match(/\\/vacancy\\/(\\d+)/)?.[1]\n         || String(Date.now());\n\nreturn [{ json: {\n  vacancy_id: id,\n  title: item.title || '',\n  salary: '',\n  company: '',\n  area: '',\n  link: item.link || '',\n  text: desc\n}}];"
       },
       "name": "Format",
       "type": "n8n-nodes-base.code",
-      "position": [1120, 300]
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "id": "5"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.JOBBOT_WEBHOOK }}/vacancy",
+        "url": "http://localhost:8080/vacancy",
         "sendBody": true,
         "contentType": "json",
-        "body": {
-          "vacancy_id": "={{ $json.vacancy_id }}",
-          "title": "={{ $json.title }}",
-          "salary": "={{ $json.salary }}",
-          "company": "={{ $json.company }}",
-          "area": "={{ $json.area }}",
-          "link": "={{ $json.link }}",
-          "text": "={{ $json.text }}"
-        },
+        "jsonBody": "={\n  \"vacancy_id\": \"{{ $json.vacancy_id }}\",\n  \"title\": \"{{ $json.title }}\",\n  \"link\": \"{{ $json.link }}\",\n  \"text\": \"{{ $json.text }}\",\n  \"salary\": \"{{ $json.salary }}\",\n  \"company\": \"{{ $json.company }}\",\n  \"area\": \"{{ $json.area }}\"\n}",
         "options": {}
       },
       "name": "Send to Jobbot",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [1340, 300]
+      "typeVersion": 4.2,
+      "position": [1340, 300],
+      "id": "6"
     }
   ],
   "connections": {
-    "Schedule": { "main": [[{ "node": "Fetch HH.ru", "type": "main", "index": 0 }]] },
-    "Fetch HH.ru": { "main": [[{ "node": "Split Vacancies", "type": "main", "index": 0 }]] },
-    "Split Vacancies": { "main": [[{ "node": "Get Details", "type": "main", "index": 0 }]] },
-    "Get Details": { "main": [[{ "node": "Format", "type": "main", "index": 0 }]] },
-    "Format": { "main": [[{ "node": "Send to Jobbot", "type": "main", "index": 0 }]] }
+    "Schedule": {
+      "main": [[{ "node": "Get HH Queries", "type": "main", "index": 0 }]]
+    },
+    "Get HH Queries": {
+      "main": [[{ "node": "Split Queries", "type": "main", "index": 0 }]]
+    },
+    "Split Queries": {
+      "main": [[{ "node": "RSS HH.ru", "type": "main", "index": 0 }]]
+    },
+    "RSS HH.ru": {
+      "main": [[{ "node": "Format", "type": "main", "index": 0 }]]
+    },
+    "Format": {
+      "main": [[{ "node": "Send to Jobbot", "type": "main", "index": 0 }]]
+    }
   }
 }
