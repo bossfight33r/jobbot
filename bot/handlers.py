@@ -151,8 +151,9 @@ async def cb_filters(cb: CallbackQuery):
 async def cb_channels(cb: CallbackQuery):
     user = await _db.get_or_create_user(cb.from_user.id)
     channels = json.loads(user["channels"])
-    text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями."
-    await cb.message.edit_text(text, reply_markup=channels_menu(channels), parse_mode="HTML")
+    stats = await _db.get_channel_stats(channels)
+    text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями за последние 7 дней."
+    await cb.message.edit_text(text, reply_markup=channels_menu(channels, stats), parse_mode="HTML")
     await cb.answer()
 
 
@@ -340,8 +341,9 @@ async def cb_del_channel(cb: CallbackQuery):
         channels.remove(ch)
         await _db.set_channels(cb.from_user.id, channels)
 
-    text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями."
-    await cb.message.edit_text(text, reply_markup=channels_menu(channels), parse_mode="HTML")
+    stats = await _db.get_channel_stats(channels)
+    text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями за последние 7 дней."
+    await cb.message.edit_text(text, reply_markup=channels_menu(channels, stats), parse_mode="HTML")
     await cb.answer(f"Удалил {ch}")
 
 

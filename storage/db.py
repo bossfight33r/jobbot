@@ -118,6 +118,23 @@ class DB:
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
 
+    async def get_channel_stats(self, channels: list[str]) -> dict[str, int]:
+        if not channels:
+            return {}
+        placeholders = ",".join("?" * len(channels))
+        async with self._conn.execute(
+            f"""
+            SELECT channel, COUNT(*) as cnt
+            FROM posts
+            WHERE channel IN ({placeholders})
+              AND posted_at >= date('now', '-7 days')
+            GROUP BY channel
+            """,
+            channels,
+        ) as cur:
+            rows = await cur.fetchall()
+            return {row["channel"]: row["cnt"] for row in rows}
+
     async def set_active(self, user_id: int, active: bool):
         await self._conn.execute(
             "UPDATE users SET active = ? WHERE user_id = ?",

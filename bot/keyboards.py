@@ -39,11 +39,13 @@ def filters_menu(keywords: list[str]) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def channels_menu(channels: list[str]) -> InlineKeyboardMarkup:
+def channels_menu(channels: list[str], stats: dict[str, int] | None = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for ch in channels:
+        count = (stats or {}).get(ch, 0)
+        label = f"📢 {ch}  {count}/7д"
         builder.row(
-            InlineKeyboardButton(text=f"📢 {ch}", callback_data="noop"),
+            InlineKeyboardButton(text=label, callback_data="noop"),
             InlineKeyboardButton(text="❌", callback_data=f"del:channel:{ch}"),
         )
     builder.row(InlineKeyboardButton(text="➕ Добавить канал", callback_data="add:channel"))
