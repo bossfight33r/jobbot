@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "url": "http://localhost:8080/hh-queries",
+        "url": "http://172.17.0.1:8080/hh-queries",
         "options": {}
       },
       "name": "Get HH Queries",
@@ -60,7 +60,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:8080/vacancy",
+        "url": "http://172.17.0.1:8080/vacancy",
         "sendBody": true,
         "contentType": "json",
         "jsonBody": "={\n  \"vacancy_id\": \"{{ $json.vacancy_id }}\",\n  \"title\": \"{{ $json.title }}\",\n  \"link\": \"{{ $json.link }}\",\n  \"text\": \"{{ $json.text }}\",\n  \"salary\": \"{{ $json.salary }}\",\n  \"company\": \"{{ $json.company }}\",\n  \"area\": \"{{ $json.area }}\"\n}",
