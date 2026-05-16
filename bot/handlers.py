@@ -264,7 +264,11 @@ async def cb_del_filter(cb: CallbackQuery):
 async def cb_add_channel(cb: CallbackQuery, state: FSMContext):
     await state.set_state(Form.adding_channel)
     await cb.message.edit_text(
-        "Введи username канала (например: <code>@python_jobs</code>):",
+        "Отправь один или несколько каналов — каждый на новой строке или через запятую.\n\n"
+        "Принимаю любой формат:\n"
+        "<code>@python_jobs</code>\n"
+        "<code>https://t.me/python_jobs</code>\n"
+        "<code>python_jobs, golang_jobs</code>",
         reply_markup=back_to_main(),
         parse_mode="HTML",
     )
@@ -273,35 +277,57 @@ async def cb_add_channel(cb: CallbackQuery, state: FSMContext):
 
 def _normalize_channel(raw: str) -> str:
     raw = raw.strip()
-    # https://t.me/username or t.me/username
     for prefix in ("https://t.me/", "http://t.me/", "t.me/"):
         if raw.lower().startswith(prefix):
             raw = raw[len(prefix):]
             break
-    raw = raw.split("/")[0].split("?")[0]
+    raw = raw.split("/")[0].split("?")[0].strip()
     if not raw.startswith("@"):
         raw = "@" + raw
     return raw
 
 
+def _parse_channels(text: str) -> list[str]:
+    import re
+    items = re.split(r"[\n,]+", text)
+    result = []
+    for item in items:
+        item = item.strip()
+        if not item:
+            continue
+        ch = _normalize_channel(item)
+        if len(ch) > 2:
+            result.append(ch)
+    return result
+
+
 @router.message(Form.adding_channel)
 async def msg_adding_channel(msg: Message, state: FSMContext):
-    ch = _normalize_channel(msg.text)
+    new_channels = _parse_channels(msg.text)
+    if not new_channels:
+        await msg.answer("Не распознал ни одного канала, попробуй ещё раз:")
+        return
 
     user = await _db.get_or_create_user(msg.from_user.id)
     channels = json.loads(user["channels"])
-    if ch not in channels:
-        channels.append(ch)
-        await _db.set_channels(msg.from_user.id, channels)
 
-        # запомнить текущий последний пост — чтобы не спамить историей
-        if _parser:
-            latest = await _parser.latest_id(ch)
-            if latest:
-                await _db.set_cursor(ch, latest)
+    added = []
+    for ch in new_channels:
+        if ch not in channels:
+            channels.append(ch)
+            added.append(ch)
+            if _parser:
+                latest = await _parser.latest_id(ch)
+                if latest:
+                    await _db.set_cursor(ch, latest)
+
+    if added:
+        await _db.set_channels(msg.from_user.id, channels)
 
     await state.clear()
     text = "<b>Каналы</b>\nОтслеживаемые каналы с вакансиями."
+    if added:
+        text += f"\n\n✅ Добавлено: {', '.join(added)}"
     await msg.answer(text, reply_markup=channels_menu(channels), parse_mode="HTML")
 
 
