@@ -3,6 +3,7 @@ import json
 import logging
 import signal
 
+from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ from filters import ai as ai_filter
 from filters.match import matches
 from parser.client import Parser
 from storage.db import DB
+from webhook.server import create_app
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -108,6 +110,13 @@ async def main():
         ai_filter.init(cfg.gemini_api_key)
         logger.info("gemini AI filter enabled")
 
+    webhook_app = create_app(db, bot)
+    runner = web.AppRunner(webhook_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", cfg.webhook_port)
+    await site.start()
+    logger.info("webhook server on port %d", cfg.webhook_port)
+
     logger.info("starting jobbot, check interval=%ds", cfg.check_interval)
 
     stop = asyncio.Event()
@@ -126,6 +135,7 @@ async def main():
     sched.cancel()
     await asyncio.gather(poll, sched, return_exceptions=True)
 
+    await runner.cleanup()
     await parser.stop()
     await db.close()
     logger.info("bye")

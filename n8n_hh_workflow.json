@@ -1,0 +1,90 @@
+{
+  "name": "HH.ru → Jobbot",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.hh.ru/vacancies",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "text", "value": "={{ $vars.HH_QUERY }}" },
+            { "name": "area", "value": "={{ $vars.HH_AREA }}" },
+            { "name": "per_page", "value": "20" },
+            { "name": "order_by", "value": "publication_time" },
+            { "name": "search_field", "value": "name" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "name": "Fetch HH.ru",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "name": "Split Vacancies",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hh.ru/vacancies/{{ $json.id }}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "name": "Get Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\nconst salary_from = item.salary?.from;\nconst salary_to = item.salary?.to;\nconst currency = item.salary?.currency || '';\n\nlet salary = '';\nif (salary_from && salary_to) {\n  salary = `${salary_from}–${salary_to} ${currency}`;\n} else if (salary_from) {\n  salary = `от ${salary_from} ${currency}`;\n} else if (salary_to) {\n  salary = `до ${salary_to} ${currency}`;\n}\n\nconst description = item.description\n  ? item.description.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 1500)\n  : '';\n\nreturn [{\n  json: {\n    vacancy_id: item.id,\n    title: item.name,\n    salary: salary,\n    company: item.employer?.name || '',\n    area: item.area?.name || '',\n    link: item.alternate_url,\n    text: description\n  }\n}];"
+      },
+      "name": "Format",
+      "type": "n8n-nodes-base.code",
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.JOBBOT_WEBHOOK }}/vacancy",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "vacancy_id": "={{ $json.vacancy_id }}",
+          "title": "={{ $json.title }}",
+          "salary": "={{ $json.salary }}",
+          "company": "={{ $json.company }}",
+          "area": "={{ $json.area }}",
+          "link": "={{ $json.link }}",
+          "text": "={{ $json.text }}"
+        },
+        "options": {}
+      },
+      "name": "Send to Jobbot",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Schedule": { "main": [[{ "node": "Fetch HH.ru", "type": "main", "index": 0 }]] },
+    "Fetch HH.ru": { "main": [[{ "node": "Split Vacancies", "type": "main", "index": 0 }]] },
+    "Split Vacancies": { "main": [[{ "node": "Get Details", "type": "main", "index": 0 }]] },
+    "Get Details": { "main": [[{ "node": "Format", "type": "main", "index": 0 }]] },
+    "Format": { "main": [[{ "node": "Send to Jobbot", "type": "main", "index": 0 }]] }
+  }
+}
