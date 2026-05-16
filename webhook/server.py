@@ -1,5 +1,8 @@
+import asyncio
 import json
 import logging
+import os
+import re
 from datetime import datetime, timezone
 
 from aiohttp import web
@@ -9,6 +12,50 @@ from filters.match import matches
 from storage.db import DB
 
 logger = logging.getLogger(__name__)
+
+OBSIDIAN_REPO = "/root/obsidian-main"
+OBSIDIAN_DIR = "Вакансии"
+
+
+def _safe_filename(title: str) -> str:
+    name = re.sub(r'[\\/*?:"<>|]', "", title).strip()
+    return name[:80] or "vacancy"
+
+
+async def _save_to_obsidian(title: str, salary: str, company: str, area: str, link: str, text: str):
+    if not os.path.isdir(OBSIDIAN_REPO):
+        return
+    try:
+        date = datetime.now().strftime("%Y-%m-%d")
+        time = datetime.now().strftime("%H:%M")
+        filename = f"{date} {_safe_filename(title)}.md"
+        filepath = os.path.join(OBSIDIAN_REPO, OBSIDIAN_DIR, filename)
+
+        lines = ["---", f"date: {date}", f"source: hh.ru", "status: новая", "---", ""]
+        lines.append(f"# {title}")
+        lines.append("")
+        if salary:
+            lines.append(f"**Зарплата:** {salary}")
+        if company:
+            lines.append(f"**Компания:** {company}")
+        if area:
+            lines.append(f"**Регион:** {area}")
+        lines.append(f"**Ссылка:** {link}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append(text[:2000])
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        await asyncio.to_thread(_git_push, filename)
+    except Exception as e:
+        logger.warning("obsidian save error: %s", e)
+
+
+def _git_push(filename: str):
+    os.system(f'cd {OBSIDIAN_REPO} && git add "{OBSIDIAN_DIR}/{filename}" && git commit -m "vacancy: {filename}" && git push')
 
 
 async def handle_vacancy(request: web.Request) -> web.Response:
@@ -45,6 +92,8 @@ async def handle_vacancy(request: web.Request) -> web.Response:
     post_id = await db.save_post("hh.ru", int(vacancy_id), full_text, posted_at)
     if post_id is None:
         return web.Response(status=200, text="duplicate")
+
+    asyncio.create_task(_save_to_obsidian(title, salary, company, area, link, text))
 
     users = await db.active_users()
     for user in users:
